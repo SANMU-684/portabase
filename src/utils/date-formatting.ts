@@ -1,0 +1,58 @@
+import {formatDistanceToNow} from "date-fns";
+
+/**
+ * Detect the user's timezone from the browser (or server during SSR fallback).
+ */
+const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+/**
+ * Format a date to DD/MM/YYYY HH:mm in 24-hour format using the en-GB locale.
+ * en-GB natively orders day before month, which matches the desired DD/MM/YYYY layout
+ * regardless of the runtime environment (SSR vs client).
+ */
+export function formatLocalizedDate(date: string | number | Date) {
+    const d = new Date(date);
+    return new Intl.DateTimeFormat("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: TIMEZONE,
+    }).format(d);
+}
+
+export function humanReadableDate(rawDate: string | number | Date) {
+    return formatLocalizedDate(rawDate);
+}
+
+export function timeAgo(rawDate: string | number | Date) {
+    const date = new Date(rawDate);
+    return formatDistanceToNow(date, { addSuffix: true });
+}
+
+export function formatDateLastContact(lastContact: string | number | Date | null) {
+    return lastContact
+        ? formatLocalizedDate(lastContact)
+        : "Never connected.";
+}
+
+export function formatDayOnly(date: string | number | Date) {
+    const d = new Date(date);
+    return new Intl.DateTimeFormat("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        timeZone: TIMEZONE,
+    }).format(d);
+}
+
+export function getTodayISODate() {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+}

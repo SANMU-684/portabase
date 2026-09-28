@@ -1,0 +1,42 @@
+import type { Metadata } from "next";
+import type React from "react";
+import "./globals.css";
+import { ConsoleSilencer } from "@/components/common/console-silencer";
+import { author, geistMono, poppins } from "@/fonts/fonts";
+import { cn } from "@/lib/utils";
+import { Providers } from "./providers";
+
+const title = process.env.PROJECT_NAME ?? "Portabase";
+
+export const metadata: Metadata = {
+  title: {
+    default: title,
+    template: `%s - ${title}`,
+  },
+  description: process.env.PROJECT_DESCRIPTION ?? undefined,
+};
+
+export default async function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <meta name="apple-mobile-web-app-title" content={title} />
+      </head>
+      <body
+        className={cn(
+          poppins.variable,
+          author.variable,
+          geistMono.variable,
+          "font-sans h-full",
+        )}
+      >
+        <ConsoleSilencer />
+        <Providers>{children}</Providers>
+      </body>
+    </html>
+  );
+}

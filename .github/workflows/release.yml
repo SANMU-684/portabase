@@ -1,0 +1,154 @@
+name: Auto Release & Publish
+
+on:
+  pull_request_target:
+    types: [ closed ]
+    branches:
+      - main
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+
+  check-skip:
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.set-skip.outputs.skip }}
+    steps:
+      - name: Determine if release should be skipped
+        id: set-skip
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          echo "PR title: $TITLE"
+
+          if [[ "$TITLE" == *"[skip-release]"* ]]; then
+            echo "PR title contains [skip-release], skipping release jobs."
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+  create-release:
+    needs: check-skip
+    if: ${{ needs.check-skip.outputs.skip == 'false' && github.event.pull_request.merged == true }}
+    runs-on: ubuntu-latest
+    outputs:
+      draft_tag: ${{ steps.release_step.outputs.draft_tag }}
+      version: ${{ steps.release_step.outputs.version }}
+    steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+
+      - name: Run release-it
+        id: release_step
+        run: |
+          git pull origin main
+          
+          VERSION=$(pnpm exec release-it --ci --release-version)
+          echo $VERSION
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+          OUTPUT=$(pnpm exec release-it --ci)
+          echo "$OUTPUT"
+          
+          DRAFT_TAG=$(echo "$OUTPUT" | grep -oE 'untagged-[a-z0-9]+')
+          echo $DRAFT_TAG
+          echo "draft_tag=$DRAFT_TAG" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+
+
+  publish-docker:
+    needs: create-release
+    if: ${{ needs.create-release.result == 'success' }}
+    uses: ./.github/workflows/docker.yml
+    with:
+      version: ${{ needs.create-release.outputs.version }}
+      ref: ${{ needs.create-release.outputs.version }}
+      add_latest: true
+    secrets:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME_2 }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD_2 }}
+
+  publish-docker-ghcr:
+    needs: create-release
+    if: ${{ needs.create-release.result == 'success' }}
+    uses: ./.github/workflows/ghcr.yml
+    with:
+      version: ${{ needs.create-release.outputs.version }}
+      ref: ${{ needs.create-release.outputs.version }}
+      add_latest: true
+
+  publish-helm:
+    needs: create-release
+    if: ${{ needs.create-release.result == 'success' }}
+    uses: ./.github/workflows/helm.yml
+    with:
+      version: ${{ needs.create-release.outputs.version }}
+    secrets:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  finalize-release:
+    needs:
+      - create-release
+      - publish-docker
+      - publish-docker-ghcr
+      - publish-helm
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.publish_release_step.outputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Publish GitHub Release
+        id: publish_release_step
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          OUTPUT=$(gh release edit ${{ needs.create-release.outputs.draft_tag }} --draft=false)
+          echo "$OUTPUT"
+          RELEASE_TAG=$(echo "$OUTPUT" | sed -E 's|.*/releases/tag/||')
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+
+  notify-discord:
+    needs:
+      - publish-docker
+      - publish-helm
+      - create-release
+      - finalize-release
+    uses: ./.github/workflows/discord.yml
+    with:
+      release_tag: ${{ needs.create-release.outputs.version }}
+      discord_title: "New Release"
+      discord_color: 3066993
+      discord_footer: "Portabase"
+    secrets:
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,8 @@
+title = "Custom gitleaks config"
+
+[allowlist]
+# Global allowlist patterns (won’t be flagged)
+regexes = []
+paths = [
+    "src/utils/init.ts"
+]

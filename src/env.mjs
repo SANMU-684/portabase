@@ -1,0 +1,219 @@
+import {createEnv} from "@t3-oss/env-nextjs";
+import path from "path";
+import {z} from "zod";
+import packageJson from "../package.json" with {type: "json"};
+
+const {version} = packageJson;
+
+export const env = createEnv({
+    emptyStringAsUndefined: true,
+    server: {
+        NEXT_PUBLIC_PROJECT_VERSION: z.string().optional(),
+
+        NODE_ENV: z.enum(["development", "production"]).optional(),
+        LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+
+        DATABASE_URL: z.url().optional(),
+
+        PROJECT_NAME: z.string().optional(),
+        PROJECT_DESCRIPTION: z.string().optional(),
+        PROJECT_URL: z
+            .string()
+            .regex(/^https?:\/\//, "URL must start with http:// or https://"),
+        PROJECT_SECRET: z.string(),
+
+        TRUSTED_DOMAINS: z.string().optional(),
+
+        SMTP_PASSWORD: z.string().optional(),
+        SMTP_FROM: z.string().optional(),
+        SMTP_HOST: z.string().optional(),
+        SMTP_PORT: z.string().optional(),
+        SMTP_USER: z.string().optional(),
+
+        AUTH_DEFAULT_USER_NAME: z.string().optional(),
+        AUTH_DEFAULT_USER: z.email().optional(),
+        AUTH_DEFAULT_PASSWORD: z.string().optional(),
+
+
+        SMTP_SECURE: z
+            .enum(["true", "false"])
+            .default("true")
+            .transform((val) => val === "true"),
+
+        AUTH_GOOGLE_ID: z.string().optional(),
+        AUTH_GOOGLE_SECRET: z.string().optional(),
+
+        AUTH_GITHUB_ID: z.string().optional(),
+        AUTH_GITHUB_SECRET: z.string().optional(),
+
+        RETENTION_CRON: z
+            .string()
+            .default(
+                process.env.NODE_ENV === "production" ? "0 7 * * *" : "* * * * *",
+            ),
+
+        CLEANING_HEALTHCHECK_LOGS_CRON: z
+            .string()
+            .default(
+                process.env.NODE_ENV === "production" ? "0 * * * *" : "* * * * *",
+            ),
+
+        HEALTHCHECK_CRON: z
+            .string()
+            .default(
+                process.env.NODE_ENV === "production" ? "0 * * * *" : "* * * * *",
+            ),
+
+        STALE_BACKUP_THRESHOLD_HOURS: z.coerce.number().default(6),
+
+        BACKUP_FOLDER_NAME: z.string().optional(),
+
+        AUTH_OIDC_ID: z.string().optional().default("oidc"),
+        AUTH_OIDC_TITLE: z.string().optional(),
+        AUTH_OIDC_DESC: z.string().optional(),
+        AUTH_OIDC_ICON: z.string().optional(),
+        AUTH_OIDC_CLIENT: z.string().optional(),
+        AUTH_OIDC_SECRET: z.string().optional(),
+        AUTH_OIDC_ISSUER_URL: z.string().optional(),
+        AUTH_OIDC_HOST: z.string().optional(),
+        AUTH_OIDC_SCOPES: z.string().optional(),
+        AUTH_OIDC_DISCOVERY_ENDPOINT: z.string().optional(),
+        AUTH_OIDC_JWKS_ENDPOINT: z.string().optional(),
+        AUTH_OIDC_PKCE: z.string().optional(),
+
+        AUTH_SOCIAL_ID: z.string().optional().default("social"),
+        AUTH_SOCIAL_TITLE: z.string().optional(),
+        AUTH_SOCIAL_DESC: z.string().optional(),
+        AUTH_SOCIAL_ICON: z.string().optional(),
+        AUTH_SOCIAL_CLIENT: z.string().optional(),
+        AUTH_SOCIAL_SECRET: z.string().optional(),
+        AUTH_SOCIAL_APPLE_APP_BUNDLE_IDENTIFIER: z.string().optional(),
+
+        ALLOWED_GROUP: z.string().optional(),
+
+        SKIP_ONBOARDING: z.string().optional().default("false"),
+
+        AUTH_EMAIL_PASSWORD_ENABLED: z.string().optional().default("true"),
+        AUTH_SIGNUP_ENABLED: z.string().optional().default("true"),
+        AUTH_PASSKEY_ENABLED: z.string().optional().default("false"),
+
+        AUTH_SYNC_OIDC_ROLES_ON_LOGIN: z.enum(["true", "false"]).default("true"),
+        AUTH_ROLE_MAP: z.string().optional(),
+        AUTH_DEFAULT_ROLE: z.string().optional().default("pending"),
+        AUTH_ALLOW_LINKING: z.enum(["true", "false"]).default("true"),
+        AUTH_ALLOW_UNLINKING: z.enum(["true", "false"]).default("true"),
+
+        PRIVATE_PATH: z.string().optional(),
+
+        OPENAPI_ENABLED: z
+            .enum(["true", "false"])
+            .default("false")
+            .transform((val) => val === "true"),
+
+        API_ENABLED: z
+            .enum(["true", "false"])
+            .default("false")
+            .transform((val) => val === "true"),
+
+        MCP_ENABLED: z
+            .enum(["true", "false"])
+            .default("false")
+            .transform((val) => val === "true"),
+
+        DEMO_ENABLED: z
+            .enum(["true", "false"])
+            .default("false")
+            .transform((val) => val === "true"),
+
+        TELEMETRY: z
+            .enum(["true", "false"])
+            .default("true")
+            .transform((val) => val === "true"),
+    },
+    client: {
+        NEXT_PUBLIC_PROJECT_VERSION: z.string().optional(),
+    },
+    runtimeEnv: {
+        NEXT_PUBLIC_PROJECT_VERSION: version || "Unknown Version",
+        LOG_LEVEL: process.env.LOG_LEVEL,
+
+        PROJECT_NAME: process.env.PROJECT_NAME,
+        PROJECT_DESCRIPTION: process.env.PROJECT_DESCRIPTION,
+        PROJECT_URL: process.env.PROJECT_URL,
+        PROJECT_SECRET: process.env.PROJECT_SECRET,
+
+        DATABASE_URL: process.env.DATABASE_URL,
+
+        TRUSTED_DOMAINS: process.env.TRUSTED_DOMAINS,
+
+        SMTP_PASSWORD: process.env.SMTP_PASSWORD,
+        SMTP_FROM: process.env.SMTP_FROM,
+        SMTP_HOST: process.env.SMTP_HOST,
+        SMTP_PORT: process.env.SMTP_PORT,
+        SMTP_USER: process.env.SMTP_USER,
+        SMTP_SECURE: process.env.SMTP_SECURE,
+
+        RETENTION_CRON: process.env.RETENTION_CRON,
+        CLEANING_HEALTHCHECK_LOGS_CRON: process.env.CLEANING_HEALTHCHECK_LOGS_CRON,
+        STALE_BACKUP_THRESHOLD_HOURS: process.env.STALE_BACKUP_THRESHOLD_HOURS,
+        BACKUP_FOLDER_NAME: process.env.BACKUP_FOLDER_NAME,
+
+        AUTH_OIDC_ID: process.env.AUTH_OIDC_ID,
+        AUTH_OIDC_TITLE: process.env.AUTH_OIDC_TITLE,
+        AUTH_OIDC_DESC: process.env.AUTH_OIDC_DESC,
+        AUTH_OIDC_ICON: process.env.AUTH_OIDC_ICON,
+        AUTH_OIDC_CLIENT: process.env.AUTH_OIDC_CLIENT,
+        AUTH_OIDC_SECRET: process.env.AUTH_OIDC_SECRET,
+        AUTH_OIDC_ISSUER_URL: process.env.AUTH_OIDC_ISSUER_URL,
+        AUTH_OIDC_HOST: process.env.AUTH_OIDC_HOST,
+        AUTH_OIDC_SCOPES: process.env.AUTH_OIDC_SCOPES,
+        AUTH_OIDC_DISCOVERY_ENDPOINT: process.env.AUTH_OIDC_DISCOVERY_ENDPOINT,
+        AUTH_OIDC_JWKS_ENDPOINT: process.env.AUTH_OIDC_JWKS_ENDPOINT,
+        AUTH_OIDC_PKCE: process.env.AUTH_OIDC_PKCE,
+
+        AUTH_GOOGLE_ID: process.env.AUTH_GOOGLE_ID,
+        AUTH_GOOGLE_SECRET: process.env.AUTH_GOOGLE_SECRET,
+
+        AUTH_GITHUB_ID: process.env.AUTH_GITHUB_ID,
+        AUTH_GITHUB_SECRET: process.env.AUTH_GITHUB_SECRET,
+
+        AUTH_SOCIAL_ID: process.env.AUTH_SOCIAL_ID,
+        AUTH_SOCIAL_TITLE: process.env.AUTH_SOCIAL_TITLE,
+        AUTH_SOCIAL_DESC: process.env.AUTH_SOCIAL_DESC,
+        AUTH_SOCIAL_ICON: process.env.AUTH_SOCIAL_ICON,
+        AUTH_SOCIAL_CLIENT: process.env.AUTH_SOCIAL_CLIENT,
+        AUTH_SOCIAL_SECRET: process.env.AUTH_SOCIAL_SECRET,
+
+        ALLOWED_GROUP: process.env.ALLOWED_GROUP,
+
+        SKIP_ONBOARDING: process.env.SKIP_ONBOARDING,
+
+        AUTH_EMAIL_PASSWORD_ENABLED: process.env.AUTH_EMAIL_PASSWORD_ENABLED,
+        AUTH_SIGNUP_ENABLED: process.env.AUTH_SIGNUP_ENABLED,
+        AUTH_PASSKEY_ENABLED: process.env.AUTH_PASSKEY_ENABLED,
+
+        AUTH_SYNC_OIDC_ROLES_ON_LOGIN: process.env.AUTH_SYNC_OIDC_ROLES_ON_LOGIN,
+
+        AUTH_ROLE_MAP: process.env.AUTH_ROLE_MAP,
+
+        AUTH_ALLOW_LINKING: process.env.AUTH_ALLOW_LINKING,
+        AUTH_ALLOW_UNLINKING: process.env.AUTH_ALLOW_UNLINKING,
+
+        PRIVATE_PATH:
+            process.env.PRIVATE_PATH || path.join(process.cwd(), "private"),
+
+        AUTH_DEFAULT_USER_NAME: process.env.AUTH_DEFAULT_USER_NAME,
+        AUTH_DEFAULT_USER: process.env.AUTH_DEFAULT_USER,
+        AUTH_DEFAULT_PASSWORD: process.env.AUTH_DEFAULT_PASSWORD,
+
+        OPENAPI_ENABLED: process.env.OPENAPI_ENABLED,
+        API_ENABLED: process.env.API_ENABLED,
+        MCP_ENABLED: process.env.MCP_ENABLED,
+
+        DEMO_ENABLED: process.env.DEMO_ENABLED,
+
+        TELEMETRY: process.env.TELEMETRY,
+
+    },
+});
+

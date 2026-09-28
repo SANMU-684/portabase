@@ -1,0 +1,29 @@
+import { z } from "zod";
+
+export const distributionEntrySchema = z.object({
+    label: z.string(),
+    count: z.number().int().nonnegative(),
+});
+
+export const telemetryPayloadSchema = z.object({
+    instanceId: z.string(),
+    instanceAge: z.string().nullable(),
+    dashboardVersion: z.string(),
+    orgsTotal: z.number().int().nonnegative(),
+    usersTotal: z.number().int().nonnegative(),
+    agentsTotal: z.number().int().nonnegative(),
+    databasesTotal: z.number().int().nonnegative(),
+    databasesByType: z.array(distributionEntrySchema),
+    storageByBackend: z.array(distributionEntrySchema),
+    notificationsByChannel: z.array(distributionEntrySchema),
+    agentsByVersion: z.array(distributionEntrySchema),
+    encryptionEnabled: z.boolean(),
+    apiEnabled: z.boolean(),
+    mcpEnabled: z.boolean(),
+    openapiEnabled: z.boolean(),
+    apiKeysTotal: z.number().int().nonnegative(),
+    backupSizeMedianBytes: z.number().int().nonnegative(),
+});
+
+export type DistributionEntry = z.infer<typeof distributionEntrySchema>;
+export type TelemetryPayload = z.infer<typeof telemetryPayloadSchema>;

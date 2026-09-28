@@ -1,0 +1,176 @@
+import {pgTable, text, boolean, timestamp, uuid, integer, pgEnum, bigint, index, check} from "drizzle-orm/pg-core";
+import {Agent, agent, AgentWith} from "./08_agent";
+import {Project, project} from "./06_project";
+import {relations, sql} from "drizzle-orm";
+import {dbmsEnum, statusEnum} from "./types";
+import {createSelectSchema} from "drizzle-zod";
+import {z} from "zod";
+import {timestamps} from "@/db/schema/00_common";
+import {AlertPolicy, alertPolicy} from "@/db/schema/10_alert-policy";
+import {StoragePolicy, storagePolicy} from "@/db/schema/13_storage-policy";
+import {BackupStorage, backupStorage} from "@/db/schema/14_storage-backup";
+import {JobLog, jobLog} from "@/db/schema/17_job-log";
+
+export const database = pgTable("databases", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentDatabaseId: uuid("agent_database_id").defaultRandom(),
+    name: text("name").notNull(),
+    dbms: dbmsEnum("dbms").notNull(),
+    description: text("description"),
+    backupPolicy: text("backup_policy"),
+    isWaitingForBackup: boolean("is_waiting_for_backup").default(false).notNull(),
+    backupToRestore: text("backup_to_restore"),
+    healthErrorCount: integer("health_error_count"),
+    agentId: uuid("agent_id")
+        .references(() => agent.id, {onDelete: "cascade"}),
+    lastContact: timestamp("last_contact"),
+    projectId: uuid("project_id")
+        .references(() => project.id),
+    ...timestamps
+}, (table) => [
+    index("idx_databases_availability")
+        .on(table.lastContact)
+        .where(sql`deleted_at IS NULL`),
+]);
+
+
+export const backup = pgTable(
+    "backups",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        status: statusEnum("status").default("waiting").notNull(),
+        file: text("file"),
+        fileSize: bigint("file_size", { mode: "number" }),
+        durationMs: bigint("duration_ms", { mode: "number" }),
+        databaseId: uuid("database_id")
+            .notNull()
+            .references(() => database.id, {onDelete: "cascade"}),
+        imported: boolean('imported').default(false),
+        migrated: boolean('migrated').default(false),
+        ...timestamps
+    },
+    (table) => [
+        index("idx_backups_status_core")
+            .on(table.status, table.deletedAt),
+        index("idx_backups_evolution")
+            .on(table.createdAt)
+            .where(sql`status = 'success' AND deleted_at IS NULL AND file_size IS NOT NULL`),
+    ]
+);
+
+export const retentionPolicyType = pgEnum("retention_policy_type", ["count", "days", "gfs"]);
+
+export const retentionPolicy = pgTable("retention_policies", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    databaseId: uuid("database_id").references(() => database.id, {onDelete: "cascade"}),
+    projectId: uuid("project_id").references(() => project.id, {onDelete: "cascade"}),
+    type: retentionPolicyType("type").notNull(),
+    count: integer("count").default(7),   // for "count"
+    days: integer("days").default(30),    // for "days"
+    gfsHourly: integer("gfs_hourly").default(0),
+    gfsDaily: integer("gfs_daily").default(7),
+    gfsWeekly: integer("gfs_weekly").default(4),
+    gfsMonthly: integer("gfs_monthly").default(12),
+    gfsYearly: integer("gfs_yearly").default(3),
+    ...timestamps
+}, (table) => [
+    check("retention_policy_owner_xor", sql`num_nonnulls(${table.databaseId}, ${table.projectId}) = 1`),
+]);
+
+
+export const restoration = pgTable("restorations", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    status: statusEnum("status").default("waiting").notNull(),
+    durationMs: bigint("duration_ms", { mode: "number" }),
+    backupStorageId: uuid("backup_storage_id")
+        .references(() => backupStorage.id, {onDelete: "cascade"}),
+    backupId: uuid("backup_id")
+        .notNull()
+        .references(() => backup.id, {onDelete: "cascade"}),
+    databaseId: uuid("database_id").references(() => database.id, {onDelete: "cascade"}),
+    ...timestamps
+
+});
+
+export const databaseRelations = relations(database, ({one, many}) => ({
+    retentionPolicy: one(retentionPolicy, {
+        fields: [database.id],
+        references: [retentionPolicy.databaseId],
+    }),
+    agent: one(agent, {fields: [database.agentId], references: [agent.id]}),
+    project: one(project, {fields: [database.projectId], references: [project.id]}),
+    backups: many(backup),
+    restorations: many(restoration),
+    alertPolicies: many(alertPolicy),
+    storagePolicies: many(storagePolicy),
+}));
+
+export const backupRelations = relations(backup, ({one, many}) => ({
+    database: one(database, {fields: [backup.databaseId], references: [database.id]}),
+    restorations: many(restoration),
+    storages: many(backupStorage),
+    logs: many(jobLog),
+
+}));
+
+export const restorationRelations = relations(restoration, ({one, many}) => ({
+    backup: one(backup, {fields: [restoration.backupId], references: [backup.id]}),
+    database: one(database, {fields: [restoration.databaseId], references: [database.id]}),
+    backupStorage: one(backupStorage, {fields: [restoration.backupStorageId], references: [backupStorage.id]}),
+    logs: many(jobLog),
+}));
+
+
+export const retentionPolicyRelations = relations(retentionPolicy, ({one}) => ({
+    database: one(database, {
+        fields: [retentionPolicy.databaseId],
+        references: [database.id],
+    }),
+    project: one(project, {
+        fields: [retentionPolicy.projectId],
+        references: [project.id],
+    }),
+}));
+
+export const databaseSchema = createSelectSchema(database);
+export type Database = z.infer<typeof databaseSchema>;
+
+export const backupSchema = createSelectSchema(backup);
+export type Backup = z.infer<typeof backupSchema>;
+
+export const restorationSchema = createSelectSchema(restoration);
+export type Restoration = z.infer<typeof restorationSchema>;
+
+export const retentionPolicySchema = createSelectSchema(retentionPolicy);
+export type RetentionPolicy = z.infer<typeof retentionPolicySchema>;
+
+
+export type DatabaseWith = Database & {
+    agent?: Agent | AgentWith | null;
+    project?: (Project & {
+        storagePolicies?: StoragePolicy[];
+        alertPolicies?: AlertPolicy[];
+        retentionPolicy?: RetentionPolicy | null;
+    }) | null;
+    backups?: Backup[] | null;
+    restorations?: Restoration[] | null;
+    retentionPolicy?: RetentionPolicy | null;
+    alertPolicies?: AlertPolicy[] | null;
+    storagePolicies?: StoragePolicy[] | null;
+};
+
+
+export type BackupWith = Backup & {
+    restorations?: Restoration[] | null;
+    storages?: BackupStorage[] | null;
+    logs?: JobLog[] | null;
+    hasLogs?: boolean;
+};
+
+export type RestorationWith = Restoration & {
+    logs?: JobLog[] | null;
+    hasLogs?: boolean;
+};
+
+
+

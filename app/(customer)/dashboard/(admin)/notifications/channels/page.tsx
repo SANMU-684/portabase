@@ -1,0 +1,47 @@
+import {PageParams} from "@/types/next";
+import {Page, PageActions, PageContent, PageHeader, PageTitle} from "@/features/layout/components/page";
+import {Metadata} from "next";
+import {db} from "@/db";
+import {notificationChannel, NotificationChannelWith} from "@/db/schema/09_notification-channel";
+import {desc, isNull} from "drizzle-orm";
+import {ChannelsSection} from "@/features/channel/components/channels-section";
+import {ChannelAddEditModal} from "@/features/channel/components/channel-add-edit-modal";
+import * as drizzleDb from "@/db";
+
+export const metadata: Metadata = {
+    title: "Notification Channels",
+};
+
+export default async function RoutePage(props: PageParams<{}>) {
+
+    const notificationChannels = await db.query.notificationChannel.findMany({
+        with: {
+            organizations: true
+        },
+        where: isNull(drizzleDb.schemas.notificationChannel.organizationId),
+        orderBy: desc(notificationChannel.createdAt)
+    }) as NotificationChannelWith[]
+
+    const organizations = await db.query.organization.findMany({
+        where: (fields) => isNull(fields.deletedAt),
+        with: {
+            members: true,
+        },
+    });
+
+
+    return (
+        <Page>
+            <PageHeader>
+                <PageTitle>Notification channels</PageTitle>
+                <PageActions>
+                    <ChannelAddEditModal kind="notification" adminView={false}/>
+                </PageActions>
+            </PageHeader>
+            <PageContent>
+                <ChannelsSection kind="notification" organizations={organizations}
+                                 channels={notificationChannels}/>
+            </PageContent>
+        </Page>
+    );
+}

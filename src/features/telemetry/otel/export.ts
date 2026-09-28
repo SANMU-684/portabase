@@ -1,0 +1,59 @@
+import type { Meter } from "@opentelemetry/api";
+import { getMeterProvider } from "@/features/telemetry/otel/instrumentation";
+import { TELEMETRY_METER_NAME } from "@/features/telemetry/constants";
+import { estimateInstanceAgeDays } from "@/features/telemetry/services/instance-age";
+import type {
+    DistributionEntry,
+    TelemetryPayload,
+} from "@/features/telemetry/schemas/telemetry.schema";
+
+function recordDistribution(
+    meter: Meter,
+    name: string,
+    attrKey: string,
+    entries: DistributionEntry[],
+): void {
+    const gauge = meter.createGauge(name);
+    for (const entry of entries) {
+        gauge.record(entry.count, { [attrKey]: entry.label });
+    }
+}
+
+export async function exportTelemetry(payload: TelemetryPayload): Promise<void> {
+    const provider = getMeterProvider(payload.instanceId);
+    const meter = provider.getMeter(TELEMETRY_METER_NAME);
+
+    meter.createGauge("portabase.users.total").record(payload.usersTotal);
+    meter.createGauge("portabase.organizations.total").record(payload.orgsTotal);
+    meter.createGauge("portabase.agents.total").record(payload.agentsTotal);
+    meter.createGauge("portabase.databases.total").record(payload.databasesTotal);
+
+    meter.createGauge("portabase.instance.info").record(1, {
+        dashboard_version: payload.dashboardVersion,
+        instance_age: payload.instanceAge ?? "unknown",
+    });
+
+    const instanceAgeDays = estimateInstanceAgeDays(payload.instanceAge);
+    if (payload.instanceAge && instanceAgeDays !== null) {
+        meter
+            .createGauge("portabase.instance.age_days")
+            .record(instanceAgeDays, { instance_age: payload.instanceAge });
+    }
+
+    meter.createGauge("portabase.encryption.enabled").record(payload.encryptionEnabled ? 1 : 0);
+
+    meter.createGauge("portabase.api.enabled").record(payload.apiEnabled ? 1 : 0);
+    meter.createGauge("portabase.mcp.enabled").record(payload.mcpEnabled ? 1 : 0);
+    meter.createGauge("portabase.openapi.enabled").record(payload.openapiEnabled ? 1 : 0);
+    meter.createGauge("portabase.api_keys.total").record(payload.apiKeysTotal);
+
+    meter.createGauge("portabase.backups.size_median_bytes").record(payload.backupSizeMedianBytes);
+
+    recordDistribution(meter, "portabase.databases.by_type", "db_type", payload.databasesByType);
+    recordDistribution(meter, "portabase.storage.backends", "backend", payload.storageByBackend);
+    recordDistribution(meter, "portabase.notification.channels", "channel", payload.notificationsByChannel);
+    recordDistribution(meter, "portabase.agents.by_version", "agent_version", payload.agentsByVersion);
+
+    await provider.forceFlush();
+    await provider.shutdown();
+}

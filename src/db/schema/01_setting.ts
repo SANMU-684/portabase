@@ -1,0 +1,34 @@
+import {boolean, pgTable, uuid, varchar} from "drizzle-orm/pg-core";
+import {createSelectSchema} from "drizzle-zod";
+import {z} from "zod";
+import {timestamps} from "@/db/schema/00_common";
+import {storageChannel} from "@/db/schema/12_storage-channel";
+import {relations} from "drizzle-orm";
+import {notificationChannel} from "@/db/schema/09_notification-channel";
+
+export const setting = pgTable("settings", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", {length: 255}).unique().notNull(),
+    smtpPassword: varchar("smtp_password", {length: 255}),
+    smtpFrom: varchar("smtp_from", {length: 255}),
+    smtpHost: varchar("smtp_host", {length: 255}),
+    smtpPort: varchar("smtp_port", {length: 255}),
+    smtpUser: varchar("smtp_user", {length: 255}),
+    smtpSecure: boolean("smtp_secure"),
+    defaultNotificationChannelId: uuid('default_notification_channel_id')
+        .references(() => notificationChannel.id, {onDelete: "set null"}),
+    defaultStorageChannelId: uuid('default_storage_channel_id')
+        .references(() => storageChannel.id, {onDelete: "set null"}),
+    encryption: boolean("encryption").default(false),
+    onboarding: boolean("onboarding").default(false).notNull(),
+    ...timestamps
+});
+
+export const settingRelations = relations(setting, ({one}) => ({
+    storageChannel: one(storageChannel, {fields: [setting.defaultStorageChannelId], references: [storageChannel.id]}),
+    notificationChannel: one(notificationChannel, {fields: [setting.defaultNotificationChannelId], references: [notificationChannel.id]}),
+}));
+
+
+export const settingSchema = createSelectSchema(setting);
+export type Setting = z.infer<typeof settingSchema>;
